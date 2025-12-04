@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/axios';
 import Link from 'next/link';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Sword, Map } from 'lucide-react';
 
 interface Course {
     id: number;
@@ -30,45 +33,47 @@ export default function Courses() {
         fetchCourses();
     }, []);
 
-    if (loading) return <div className="p-8 text-slate-400">Loading quests...</div>;
+    if (loading) return <div className="p-8 text-muted-foreground">Loading quests...</div>;
 
     return (
-        <div className="min-h-screen">
-            <div className="max-w-6xl mx-auto">
-                <div className="flex items-center justify-between mb-8">
-                    <h1 className="text-3xl font-bold text-slate-100">Available Quests</h1>
-                    <div className="text-sm text-slate-400">Select a path to begin your journey</div>
+        <div className="min-h-screen p-8">
+            <div className="max-w-6xl mx-auto space-y-8">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight text-foreground">Available Quests</h1>
+                        <p className="text-muted-foreground mt-2">Select a path to begin your journey</p>
+                    </div>
+                    <Map className="h-8 w-8 text-muted-foreground opacity-50" />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {courses.map((course) => (
-                        <div 
+                        <Card 
                             key={course.id} 
-                            className="group bg-slate-900 rounded-xl border border-slate-800 overflow-hidden hover:border-purple-500 transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/10 flex flex-col"
+                            className="group overflow-hidden border-primary/20 bg-card/50 backdrop-blur-sm hover:border-primary transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 flex flex-col"
                         >
                             {/* Card Header / Image Placeholder */}
-                            <div className="h-32 bg-gradient-to-br from-slate-800 to-slate-900 p-6 flex items-center justify-center group-hover:from-slate-800 group-hover:to-purple-900/20 transition-colors">
-                                <span className="text-4xl">⚔️</span>
+                            <div className="h-32 bg-gradient-to-br from-muted/50 to-muted p-6 flex items-center justify-center group-hover:from-muted/50 group-hover:to-primary/20 transition-colors">
+                                <Sword className="h-12 w-12 text-muted-foreground group-hover:text-primary transition-colors" />
                             </div>
 
-                            <div className="p-6 flex-grow">
-                                <h2 className="text-xl font-bold mb-2 text-slate-100 group-hover:text-purple-400 transition-colors">
+                            <CardHeader>
+                                <CardTitle className="text-xl group-hover:text-primary transition-colors">
                                     {course.title}
-                                </h2>
-                                <p className="text-slate-400 text-sm line-clamp-3 leading-relaxed">
+                                </CardTitle>
+                                <CardDescription className="line-clamp-3">
                                     {course.description}
-                                </p>
-                            </div>
+                                </CardDescription>
+                            </CardHeader>
                             
-                            <div className="p-6 pt-0 mt-auto">
-                                <Link 
-                                    href={`/courses/${course.id}`}
-                                    className="block w-full text-center bg-slate-800 text-slate-200 border border-slate-700 px-4 py-3 rounded-lg font-medium hover:bg-purple-600 hover:text-white hover:border-purple-500 transition-all duration-200 shadow-sm"
-                                >
-                                    Embark on Quest
-                                </Link>
-                            </div>
-                        </div>
+                            <CardFooter className="mt-auto">
+                                <Button asChild className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-all">
+                                    <Link href={`/courses/${course.id}`}>
+                                        Embark on Quest
+                                    </Link>
+                                </Button>
+                            </CardFooter>
+                        </Card>
                     ))}
                 </div>
             </div>

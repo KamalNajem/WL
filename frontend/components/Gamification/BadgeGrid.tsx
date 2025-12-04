@@ -1,4 +1,7 @@
 import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Backpack } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface Badge {
     name: string;
@@ -19,41 +22,50 @@ const ALL_BADGES = [
 ];
 
 export default function BadgeGrid({ badges }: BadgeGridProps) {
-    const earnedNames = new Set(badges.map(b => b.name));
+    const earnedNames = new Set((badges || []).map(b => b.name));
 
     return (
-        <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-sm">
-            <h3 className="font-bold text-slate-200 mb-4 flex items-center gap-2">
-                <span>🎒</span> Inventory <span className="text-slate-500 text-sm font-normal">(Badges)</span>
-            </h3>
-            <div className="grid grid-cols-4 gap-3">
-                {ALL_BADGES.map((badge) => {
-                    const isEarned = earnedNames.has(badge.name);
-                    return (
-                        <div 
-                            key={badge.name} 
-                            className={`aspect-square flex flex-col items-center justify-center p-2 rounded-lg border-2 transition-all duration-300 relative group ${
-                                isEarned 
-                                    ? 'border-purple-500/50 bg-purple-500/10 shadow-[0_0_15px_rgba(168,85,247,0.2)]' 
-                                    : 'border-slate-800 bg-slate-950 opacity-40 grayscale'
-                            }`}
-                            title={badge.description}
-                        >
-                            <span className={`text-3xl mb-2 transition-transform duration-300 ${isEarned ? 'group-hover:scale-110' : ''}`}>
-                                {badge.icon}
-                            </span>
-                            <span className={`text-[10px] font-bold uppercase tracking-wide text-center ${isEarned ? 'text-purple-300' : 'text-slate-600'}`}>
-                                {badge.name}
-                            </span>
-                            
-                            {/* Tooltip on Hover */}
-                            <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-slate-800 text-slate-200 text-xs px-2 py-1 rounded border border-slate-700 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                                {badge.description}
+        <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
+            <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                    <Backpack className="h-5 w-5 text-primary" />
+                    Inventory <span className="text-muted-foreground text-sm font-normal">(Badges)</span>
+                </CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    {ALL_BADGES.map((badge) => {
+                        const isEarned = earnedNames.has(badge.name);
+                        return (
+                            <div 
+                                key={badge.name} 
+                                className={cn(
+                                    "aspect-square flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all duration-300 relative group",
+                                    isEarned 
+                                        ? "border-primary/50 bg-primary/10 shadow-[0_0_15px_rgba(124,58,237,0.2)] hover:border-primary hover:shadow-[0_0_20px_rgba(124,58,237,0.4)]" 
+                                        : "border-muted bg-muted/20 opacity-50 grayscale"
+                                )}
+                                title={badge.description}
+                            >
+                                <span className={cn("text-4xl mb-3 transition-transform duration-300", isEarned && "group-hover:scale-110")}>
+                                    {badge.icon}
+                                </span>
+                                <span className={cn(
+                                    "text-xs font-bold uppercase tracking-wide text-center",
+                                    isEarned ? "text-primary" : "text-muted-foreground"
+                                )}>
+                                    {badge.name}
+                                </span>
+                                
+                                {/* Tooltip on Hover */}
+                                <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground text-xs px-3 py-1.5 rounded-md border border-border opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-md">
+                                    {badge.description}
+                                </div>
                             </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
+                        );
+                    })}
+                </div>
+            </CardContent>
+        </Card>
     );
 }

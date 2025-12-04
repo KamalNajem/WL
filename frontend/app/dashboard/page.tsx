@@ -5,6 +5,9 @@ import api from '@/lib/axios';
 import Link from 'next/link';
 import LevelProgress from '@/components/Gamification/LevelProgress';
 import BadgeGrid from '@/components/Gamification/BadgeGrid';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Brain, RefreshCw, BookOpen, Trophy, Sparkles } from 'lucide-react';
 
 interface UserProfile {
     username: string;
@@ -61,79 +64,104 @@ export default function Dashboard() {
         }
     };
 
-    if (loading) return <div className="p-8 text-slate-200">Loading...</div>;
-    if (!user) return <div className="p-8 text-slate-200">Please log in.</div>;
+    if (loading) return <div className="p-8 text-muted-foreground">Loading...</div>;
+    if (!user) return <div className="p-8 text-muted-foreground">Please log in.</div>;
 
     return (
-        <div className="min-h-screen bg-slate-950 p-8">
-            <div className="max-w-5xl mx-auto">
-                <h1 className="text-3xl font-bold mb-8 text-slate-100">Welcome, <span className="text-indigo-400">{user.username}</span></h1>
+        <div className="min-h-screen bg-background p-8">
+            <div className="max-w-5xl mx-auto space-y-8">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <h1 className="text-3xl font-bold text-foreground">
+                        Welcome, <span className="text-primary">{user.username}</span>
+                    </h1>
+                    <div className="flex gap-2">
+                        <Button variant="outline" asChild>
+                            <Link href="/profile">View Profile</Link>
+                        </Button>
+                    </div>
+                </div>
 
                 {/* Gamification Section */}
-                <div className="mb-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2">
                          <LevelProgress points={user.gamification_points || 0} level={user.current_level || 1} />
                     </div>
                     <div className="lg:col-span-1">
-                        {/* Mini Stats or something could go here, but for now just the badges below */}
+                        <Card className="h-full flex flex-col justify-center items-center text-center p-6 bg-gradient-to-br from-primary/10 to-background border-primary/20">
+                            <Trophy className="w-12 h-12 text-primary mb-2" />
+                            <h3 className="text-lg font-bold text-foreground">Keep it up!</h3>
+                            <p className="text-sm text-muted-foreground">You're doing great on your learning journey.</p>
+                        </Card>
                     </div>
                 </div>
                 
-                <div className="mb-8">
+                <div>
                     <BadgeGrid badges={user.badges_earned || []} />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Vibe Check Card */}
-                    <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg">
-                        <h2 className="text-xl font-semibold mb-4 text-slate-200">Your Learning Vibe</h2>
-                        {user.current_style_label ? (
-                            <div className="text-center py-8">
-                                <span className="text-4xl font-bold text-indigo-400 block mb-2">
-                                    {user.current_style_label}
-                                </span>
-                                <p className="text-slate-400 mb-6">We've adapted the content for you.</p>
-                                <button
-                                    onClick={resetStyle}
-                                    className="text-sm text-red-400 hover:text-red-300 underline transition-colors"
-                                >
-                                    Reset & Retake Quiz
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="text-center py-8">
-                                <p className="text-slate-400 mb-6">We don't know your style yet.</p>
-                                <div className="flex flex-col gap-4 items-center">
-                                    <Link
-                                        href="/quiz"
-                                        className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-900/20 font-medium w-full max-w-xs"
+                    <Card className="border-primary/20 shadow-lg shadow-primary/5">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Brain className="w-5 h-5 text-primary" />
+                                Your Learning Vibe
+                            </CardTitle>
+                            <CardDescription>We've adapted the content for you.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="text-center py-6">
+                            {user.current_style_label ? (
+                                <>
+                                    <span className="text-4xl font-bold text-primary block mb-2">
+                                        {user.current_style_label}
+                                    </span>
+                                    <p className="text-muted-foreground mb-6">Optimized for your success.</p>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        onClick={resetStyle}
+                                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
                                     >
-                                        Take Learning Style Quiz
-                                    </Link>
-                                    <button
-                                        onClick={analyzeStyle}
-                                        disabled={analyzing}
-                                        className="text-indigo-400 text-sm hover:text-indigo-300 transition-colors"
-                                    >
-                                        {analyzing ? 'Analyzing...' : 'Or analyze based on behavior'}
-                                    </button>
+                                        <RefreshCw className="w-4 h-4 mr-2" />
+                                        Reset & Retake Quiz
+                                    </Button>
+                                </>
+                            ) : (
+                                <div className="space-y-4">
+                                    <p className="text-muted-foreground">We don't know your style yet!</p>
+                                    <Button asChild className="w-full">
+                                        <Link href="/quiz">
+                                            <Sparkles className="w-4 h-4 mr-2" />
+                                            Take the Vibe Quiz
+                                        </Link>
+                                    </Button>
                                 </div>
-                            </div>
-                        )}
-                    </div>
+                            )}
+                        </CardContent>
+                    </Card>
 
-                    {/* Quick Links */}
-                    <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-lg">
-                        <h2 className="text-xl font-semibold mb-4 text-slate-200">Quick Actions</h2>
-                        <div className="space-y-4">
-                            <Link 
-                                href="/courses"
-                                className="block w-full text-center border border-indigo-500/30 text-indigo-400 px-4 py-3 rounded-lg hover:bg-indigo-500/10 transition-all font-medium"
-                            >
-                                Browse Courses
-                            </Link>
-                        </div>
-                    </div>
+                    {/* Quick Actions */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <BookOpen className="w-5 h-5 text-primary" />
+                                Jump Back In
+                            </CardTitle>
+                            <CardDescription>Continue where you left off.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <Button asChild className="w-full" size="lg">
+                                <Link href="/courses">
+                                    Browse Courses
+                                </Link>
+                            </Button>
+                            <Button variant="secondary" asChild className="w-full">
+                                <Link href="/profile">
+                                    Check Achievements
+                                </Link>
+                            </Button>
+                        </CardContent>
+                    </Card>
                 </div>
             </div>
         </div>

@@ -3,6 +3,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/axios';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
+import { CheckCircle2 } from 'lucide-react';
 
 const questions = [
     {
@@ -197,20 +202,29 @@ export default function QuizPage() {
 
     if (result) {
         return (
-            <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-                <div className="bg-slate-900 p-8 rounded-xl border border-slate-800 shadow-lg max-w-md w-full text-center">
-                    <div className="mb-6 text-6xl">🎉</div>
-                    <h1 className="text-3xl font-bold mb-4 text-slate-100">Result: <span className="text-indigo-400">{result}</span> Learner</h1>
-                    <p className="text-slate-400 mb-8">
-                        We have updated your profile. Your course content will now be adapted to your {result} learning style.
-                    </p>
-                    <button
-                        onClick={() => router.push('/dashboard')}
-                        className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-900/20"
-                    >
-                        Go to Dashboard
-                    </button>
-                </div>
+            <div className="min-h-screen bg-background flex items-center justify-center p-4">
+                <Card className="max-w-md w-full text-center border-primary/20 bg-card/50 backdrop-blur-sm">
+                    <CardHeader>
+                        <div className="mb-6 text-6xl animate-bounce">🎉</div>
+                        <CardTitle className="text-3xl font-bold mb-4">
+                            Result: <span className="text-primary">{result}</span> Learner
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-muted-foreground mb-8">
+                            We have updated your profile. Your course content will now be adapted to your {result} learning style.
+                        </p>
+                    </CardContent>
+                    <CardFooter>
+                        <Button 
+                            onClick={() => router.push('/dashboard')}
+                            className="w-full"
+                            size="lg"
+                        >
+                            Go to Dashboard
+                        </Button>
+                    </CardFooter>
+                </Card>
             </div>
         );
     }
@@ -218,79 +232,75 @@ export default function QuizPage() {
     const question = questions[currentStep];
     const isLastQuestion = currentStep === questions.length - 1;
     const canProceed = !!answers[question.id];
+    const progressValue = ((currentStep + 1) / questions.length) * 100;
 
     return (
-        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
-            <div className="w-full max-w-2xl bg-slate-900 rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
+        <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+            <Card className="w-full max-w-2xl border-border bg-card/50 backdrop-blur-sm shadow-xl">
                 {/* Progress Bar */}
-                <div className="bg-slate-800 h-2 w-full">
-                    <div 
-                        className="bg-indigo-500 h-full transition-all duration-300 shadow-[0_0_10px_rgba(99,102,241,0.5)]"
-                        style={{ width: `${((currentStep + 1) / questions.length) * 100}%` }}
-                    />
+                <div className="px-6 pt-6">
+                    <Progress value={progressValue} className="h-2" />
                 </div>
 
-                <div className="p-8 md:p-12">
-                    <div className="mb-8">
-                        <span className="text-sm font-bold text-indigo-400 tracking-wider uppercase">
+                <CardHeader className="p-8 md:p-12 pb-4">
+                    <div className="mb-4">
+                        <span className="text-sm font-bold text-primary tracking-wider uppercase">
                             Question {currentStep + 1} of {questions.length}
                         </span>
-                        <h2 className="text-2xl md:text-3xl font-bold text-slate-100 mt-2">
+                        <CardTitle className="text-2xl md:text-3xl font-bold mt-2 leading-tight">
                             {question.text}
-                        </h2>
+                        </CardTitle>
                     </div>
+                </CardHeader>
 
-                    <div className="space-y-4">
-                        {question.options.map((option) => (
-                            <button
+                <CardContent className="p-8 md:p-12 pt-0 space-y-4">
+                    {question.options.map((option) => {
+                        const isSelected = answers[question.id] === option.key;
+                        return (
+                            <div
                                 key={option.key}
                                 onClick={() => handleOptionSelect(option.key)}
-                                className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 flex items-center gap-4
-                                    ${answers[question.id] === option.key 
-                                        ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300' 
-                                        : 'border-slate-700 hover:border-indigo-500/50 hover:bg-slate-800 text-slate-300'
-                                    }`}
+                                className={cn(
+                                    "w-full text-left p-4 rounded-xl border-2 transition-all duration-200 flex items-center gap-4 cursor-pointer hover:bg-accent/50",
+                                    isSelected 
+                                        ? "border-primary bg-primary/10" 
+                                        : "border-border hover:border-primary/50"
+                                )}
                             >
-                                <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold border
-                                    ${answers[question.id] === option.key
-                                        ? 'bg-indigo-600 text-white border-indigo-600'
-                                        : 'bg-slate-800 text-slate-400 border-slate-600'
-                                    }`}
-                                >
-                                    {option.key}
+                                <div className={cn(
+                                    "w-8 h-8 rounded-full flex items-center justify-center font-bold border transition-colors",
+                                    isSelected
+                                        ? "bg-primary text-primary-foreground border-primary"
+                                        : "bg-muted text-muted-foreground border-border"
+                                )}>
+                                    {isSelected ? <CheckCircle2 className="h-5 w-5" /> : option.key}
+                                </div>
+                                <span className={cn("font-medium", isSelected ? "text-primary" : "text-foreground")}>
+                                    {option.text}
                                 </span>
-                                <span className="font-medium">{option.text}</span>
-                            </button>
-                        ))}
-                    </div>
+                            </div>
+                        );
+                    })}
+                </CardContent>
 
-                    <div className="mt-10 flex justify-between items-center">
-                        <button
-                            onClick={handlePrevious}
-                            disabled={currentStep === 0}
-                            className={`px-6 py-2 rounded-lg font-medium transition-colors
-                                ${currentStep === 0 
-                                    ? 'text-slate-600 cursor-not-allowed' 
-                                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                                }`}
-                        >
-                            Previous
-                        </button>
-                        
-                        <button
-                            onClick={handleNext}
-                            disabled={!canProceed || loading}
-                            className={`px-8 py-3 rounded-lg font-bold text-white transition-all transform
-                                ${!canProceed 
-                                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed' 
-                                    : 'bg-indigo-600 hover:bg-indigo-500 hover:scale-105 shadow-lg shadow-indigo-900/20'
-                                }`}
-                        >
-                            {loading ? 'Calculating...' : isLastQuestion ? 'Finish Quiz' : 'Next Question'}
-                        </button>
-                    </div>
-                </div>
-            </div>
+                <CardFooter className="p-8 md:p-12 pt-0 flex justify-between items-center">
+                    <Button
+                        variant="ghost"
+                        onClick={handlePrevious}
+                        disabled={currentStep === 0}
+                    >
+                        Previous
+                    </Button>
+                    
+                    <Button
+                        onClick={handleNext}
+                        disabled={!canProceed || loading}
+                        className={cn("min-w-[140px]", !canProceed && "opacity-50")}
+                    >
+                        {loading ? 'Calculating...' : isLastQuestion ? 'Finish Quiz' : 'Next Question'}
+                    </Button>
+                </CardFooter>
+            </Card>
         </div>
     );
 }
