@@ -33,13 +33,15 @@ class StudentProfile(models.Model):
     text_reading_duration = models.FloatField(default=0.0)
     quiz_attempts = models.IntegerField(default=0)
     
-    # Dataset Metrics
+    # Dataset Metrics (matching merged_dataset.csv for retraining)
     attendance = models.FloatField(default=0.0)
     resources_visited = models.IntegerField(default=0)
+    resources_visited_count = models.IntegerField(default=0)  # Alias for ML pipeline
     extracurricular_activities = models.BooleanField(default=False)
     motivation_level = models.CharField(max_length=50, blank=True, null=True)
     internet_usage = models.FloatField(default=0.0)
     exam_score = models.FloatField(default=0.0)
+    average_quiz_score = models.FloatField(default=0.0)  # For ML pipeline
 
     # Gamification Fields
     gamification_points = models.IntegerField(default=0)
