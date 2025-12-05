@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import api from '@/lib/axios';
-import { LayoutDashboard, BookOpen, FileQuestion, User, GraduationCap } from 'lucide-react';
+import { LayoutDashboard, BookOpen, FileQuestion, User, GraduationCap, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface UserProfile {
@@ -33,6 +33,7 @@ export default function Sidebar() {
         { name: 'Courses', href: '/courses', icon: BookOpen },
         { name: 'Quizzes', href: '/quiz', icon: FileQuestion },
         { name: 'Profile', href: '/profile', icon: User },
+        { name: 'Instructor', href: '/instructor', icon: BarChart3 },
     ];
 
     return (
