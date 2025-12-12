@@ -9,9 +9,9 @@ class GamificationEngine:
         Returns a dictionary with points added and if level up occurred.
         """
         try:
-            profile = user.studentprofile
+            profile = user.student_profile
         except StudentProfile.DoesNotExist:
-            return {"points_added": 0, "level_up": False}
+            return {"points_added": 0, "level_up": False, "current_points": 0}
 
         profile.gamification_points += amount
         
@@ -29,6 +29,7 @@ class GamificationEngine:
             "points_added": amount,
             "level_up": level_up,
             "current_level": profile.current_level,
+            "current_points": profile.gamification_points,
             "total_points": profile.gamification_points
         }
 
@@ -39,12 +40,13 @@ class GamificationEngine:
         Returns a list of newly earned badges.
         """
         try:
-            profile = user.studentprofile
+            profile = user.student_profile
         except StudentProfile.DoesNotExist:
             return []
 
         new_badges = []
-        existing_badge_names = {b['name'] for b in profile.badges_earned}
+        existing_badges = profile.badges_earned or []
+        existing_badge_names = {b.get('name', '') for b in existing_badges if isinstance(b, dict)}
         
         # Badge Definitions
         badges_to_check = [
@@ -82,6 +84,9 @@ class GamificationEngine:
                     "description": badge["description"],
                     "date": datetime.now().isoformat()
                 }
+                # Ensure badges_earned is a list before appending
+                if not isinstance(profile.badges_earned, list):
+                    profile.badges_earned = []
                 profile.badges_earned.append(new_badge)
                 new_badges.append(new_badge)
 

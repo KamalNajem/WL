@@ -48,8 +48,10 @@ export function GamificationProvider({ children }: { children: ReactNode }) {
 
     // Fetch gamification data from backend
     const refreshGamification = useCallback(async () => {
+        console.log("🔄 Refreshing gamification status...");
         try {
             const response = await api.get('analytics/status/');
+            console.log("🔄 Gamification status received:", response.data);
             setGamification(response.data);
         } catch (error) {
             console.error('Error fetching gamification data:', error);

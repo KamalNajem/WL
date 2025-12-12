@@ -10,6 +10,7 @@ from .serializers import (
     UserNoteSerializer, CommentSerializer
 )
 from analytics.gamification import GamificationEngine
+from analytics.models import InteractionLog
 
 
 class CourseViewSet(viewsets.ReadOnlyModelViewSet):
@@ -101,7 +102,10 @@ class UpdateProgressView(APIView):
         timestamp = request.data.get('timestamp', 0)
         percent = request.data.get('percent', 0)
         
+        print(f"📥 Received Progress: User={request.user.username}, Block={content_id}, Timestamp={timestamp}, %={percent}")
+        
         if not content_id:
+            print(f"❌ Missing content_id in request")
             return Response(
                 {'error': 'content_id is required'}, 
                 status=status.HTTP_400_BAD_REQUEST
@@ -120,12 +124,41 @@ class UpdateProgressView(APIView):
             }
         )
         
+        print(f"📊 ContentProgress {'CREATED' if created else 'UPDATED'}: Block={content_id}, User={request.user.username}")
+        
         # Update progress
         progress.last_timestamp = timestamp
         progress.progress_percent = percent
         
         if percent > 0:
             progress.status = ContentProgress.Status.IN_PROGRESS
+        
+        # ========== CREATE INTERACTION LOG ==========
+        # Determine interaction type based on percent
+        if percent >= 90:
+            interaction_type = 'complete'
+        elif created:
+            interaction_type = 'view'
+        else:
+            interaction_type = 'heartbeat'
+        
+        # Calculate time spent (default to 10 seconds for heartbeat interval)
+        time_spent = request.data.get('duration', 10.0)
+        
+        # Create interaction log entry
+        interaction_log = InteractionLog.objects.create(
+            user=request.user,
+            content_block=content_block,
+            interaction_type=interaction_type,
+            time_spent_seconds=time_spent,
+            video_timestamp=timestamp,
+            metadata={
+                'percent': percent,
+                'progress_id': progress.id
+            }
+        )
+        print(f"✅ Logged interaction for {request.user.username}: type={interaction_type}, time_spent={time_spent}s, log_id={interaction_log.id}")
+        # ============================================
         
         response_data = {
             'status': 'updated',
@@ -136,13 +169,17 @@ class UpdateProgressView(APIView):
         
         # Check for completion (>90% and not already completed)
         if percent >= 90 and not progress.is_completed:
+            print(f"🏆 COMPLETION TRIGGERED! User={request.user.username}, Block={content_id}, Percent={percent}")
             progress.status = ContentProgress.Status.COMPLETED
             progress.is_completed = True
             progress.completed_at = timezone.now()
             
             # Trigger gamification
+            print(f"🏆 Awarding 50 XP points to {request.user.username}...")
             points_result = GamificationEngine.award_points(request.user, 50)
+            print(f"🏆 Points Result: {points_result}")
             new_badges = GamificationEngine.check_badges(request.user)
+            print(f"🏆 New Badges: {new_badges}")
             
             response_data['gamification'] = {
                 'points_added': points_result['points_added'],

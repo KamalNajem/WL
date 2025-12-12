@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
+import { useGamification } from '@/contexts/GamificationContext';
 import { 
     CheckCircle2, 
     AlertCircle, 
@@ -44,6 +45,7 @@ export default function SmartVideoPlayer({
 }: SmartVideoPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const { refreshGamification } = useGamification();
     
     const [duration, setDuration] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
@@ -88,26 +90,36 @@ export default function SmartVideoPlayer({
     }, [contentId]);
 
     // Save progress to backend
-    const saveProgress = useCallback(async (timestamp: number, percent: number) => {
+    const saveProgress = useCallback(async (timestamp: number, percent: number, duration: number = 10) => {
+        console.log("💓 Sending Heartbeat:", { contentId, timestamp: Math.round(timestamp), percent: Math.round(percent), duration });
+        
         try {
             const response = await api.post('courses/progress/', {
                 content_id: contentId,
                 timestamp: timestamp,
                 percent: Math.round(percent),
+                duration: duration, // Time spent since last heartbeat
             });
+            
+            console.log("✅ Heartbeat Response:", response.data);
             
             setLastSavedTime(timestamp);
             
             if (response.data.gamification) {
+                console.log("🎮 Gamification earned:", response.data.gamification);
                 setIsCompleted(true);
                 onComplete?.(response.data.gamification);
+                
+                // Refresh gamification context to update UI
+                console.log("🔄 Triggering gamification refresh...");
+                await refreshGamification();
             }
             
             onProgressUpdate?.(percent);
         } catch (error) {
-            console.error('Error saving progress:', error);
+            console.error('❌ Error saving progress:', error);
         }
-    }, [contentId, onComplete, onProgressUpdate]);
+    }, [contentId, onComplete, onProgressUpdate, refreshGamification]);
 
     // Auto-resume: seek to saved position when video metadata loads
     const handleLoadedMetadata = () => {
@@ -142,9 +154,12 @@ export default function SmartVideoPlayer({
                     const currentT = video.currentTime;
                     const percentPlayed = (currentT / duration) * 100;
                     
+                    // Calculate actual time since last save
+                    const timeSinceLastSave = Math.abs(currentT - lastSavedTime);
+                    
                     // Only save if we've moved at least 5 seconds since last save
-                    if (Math.abs(currentT - lastSavedTime) > 5) {
-                        saveProgress(currentT, percentPlayed);
+                    if (timeSinceLastSave > 5) {
+                        saveProgress(currentT, percentPlayed, timeSinceLastSave);
                     }
                 }
             }, 10000);
@@ -162,7 +177,8 @@ export default function SmartVideoPlayer({
             if (video && duration > 0) {
                 const currentT = video.currentTime;
                 const percentPlayed = (currentT / duration) * 100;
-                saveProgress(currentT, percentPlayed);
+                const timeSinceLastSave = Math.abs(currentT - lastSavedTime);
+                saveProgress(currentT, percentPlayed, Math.max(timeSinceLastSave, 1));
             }
         };
 
@@ -180,8 +196,10 @@ export default function SmartVideoPlayer({
 
     // Handle video ended
     const handleEnded = () => {
+        console.log("✅ Video Completed! Duration:", duration, "seconds");
         setIsPlaying(false);
-        saveProgress(duration, 100);
+        const timeSinceLastSave = Math.abs(duration - lastSavedTime);
+        saveProgress(duration, 100, Math.max(timeSinceLastSave, 1));
     };
 
     // Skip forward/backward

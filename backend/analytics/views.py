@@ -6,6 +6,7 @@ from django.db.models import Count, Avg, Sum
 from .models import InteractionLog
 from .serializers import InteractionLogSerializer
 from .gamification import GamificationEngine
+from .data_bridge import DataBridge
 from users.models import User, StudentProfile
 from courses.models import Course, ContentBlock
 
@@ -88,6 +89,19 @@ class InstructorAnalyticsView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
+        print("📊 InstructorAnalyticsView.get() called")
+        
+        # ========== SYNC ALL USER PROFILES FIRST ==========
+        # This ensures the dashboard shows fresh data from InteractionLogs
+        all_users = User.objects.filter(is_student=True)
+        for user in all_users:
+            try:
+                DataBridge.sync_user_profile(user)
+                print(f"📊 Synced profile for {user.username}")
+            except Exception as e:
+                print(f"⚠️ Failed to sync profile for {user.username}: {e}")
+        # ==================================================
+        
         # 1. Learning Style Distribution
         style_counts = (
             User.objects
@@ -100,6 +114,7 @@ class InstructorAnalyticsView(APIView):
             item['current_style_label']: item['count'] 
             for item in style_counts
         }
+        print(f"📊 Learning Style Distribution: {learning_style_distribution}")
 
         # 2. Course Popularity (completions per course)
         course_completions = (
@@ -115,6 +130,8 @@ class InstructorAnalyticsView(APIView):
             }
             for item in course_completions
         ]
+        print(f"📊 Course Popularity: {course_popularity}")
+        print(f"📊 Total InteractionLogs: {InteractionLog.objects.count()}")
 
         # 3. Average Engagement per Content Type
         engagement_by_type = (
@@ -133,6 +150,7 @@ class InstructorAnalyticsView(APIView):
             }
             for item in engagement_by_type
         ]
+        print(f"📊 Average Engagement: {average_engagement}")
 
         # 4. At-Risk Students (low engagement or low scores)
         at_risk_students = []

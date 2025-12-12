@@ -234,6 +234,8 @@ class DataBridge:
         from courses.models import ContentBlock
         from comments.models import Comment
         
+        print("📊 Generating Training Data...")
+        
         # Load historical data
         csv_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), 
@@ -244,6 +246,9 @@ class DataBridge:
         historical_df = pd.DataFrame()
         if os.path.exists(csv_path):
             historical_df = pd.read_csv(csv_path)
+            print(f"📊 Loaded {len(historical_df)} historical records from CSV")
+        else:
+            print(f"⚠️ No historical CSV found at {csv_path}")
         
         # Get defaults from historical data for missing values
         defaults = {}
@@ -263,6 +268,9 @@ class DataBridge:
         
         # Fetch all student profiles from DB
         profiles = StudentProfile.objects.select_related('user').all()
+        print(f"📊 Found {profiles.count()} student profiles in DB")
+        print(f"📊 Total InteractionLog entries: {InteractionLog.objects.count()}")
+        print(f"📊 Total ContentProgress entries: {ContentProgress.objects.count()}")
         
         live_data = []
         for profile in profiles:
@@ -277,6 +285,8 @@ class DataBridge:
                 total=Sum('time_spent_seconds')
             )['total'] or 0
             study_hours = total_seconds / 3600
+            
+            print(f"📊 User {user.username}: InteractionLogs total_seconds={total_seconds}, study_hours={study_hours:.2f}")
             
             # Count resources accessed (ContentProgress entries)
             resources = ContentProgress.objects.filter(user=user).count()
