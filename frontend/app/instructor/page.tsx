@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import api from '@/lib/axios';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { 
     PieChart, Pie, Cell, 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
     ResponsiveContainer 
 } from 'recharts';
-import { Users, BookOpen, AlertTriangle, TrendingUp, Brain, BarChart3 } from 'lucide-react';
+import { Users, BookOpen, AlertTriangle, TrendingUp, Brain, BarChart3, RefreshCw } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface AnalyticsData {
     learning_style_distribution: Record<string, number>;
@@ -23,6 +25,7 @@ const COLORS = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899'
 export default function InstructorDashboard() {
     const [data, setData] = useState<AnalyticsData | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isRetraining, setIsRetraining] = useState(false);
 
     useEffect(() => {
         const fetchAnalytics = async () => {
@@ -37,6 +40,29 @@ export default function InstructorDashboard() {
         };
         fetchAnalytics();
     }, []);
+
+    const handleRetrainModel = async () => {
+        setIsRetraining(true);
+        toast.loading('Training AI model...', { id: 'retrain' });
+        
+        try {
+            const response = await api.post('adaptation/retrain/');
+            
+            if (response.data.status === 'success') {
+                toast.success(
+                    `AI Brain Updated Successfully! 🧠\n${response.data.details.students_updated} students updated.`,
+                    { id: 'retrain', duration: 5000 }
+                );
+            } else {
+                toast.error(response.data.message || 'Retraining failed', { id: 'retrain' });
+            }
+        } catch (error) {
+            console.error('Error retraining model:', error);
+            toast.error('Failed to retrain model. Please try again.', { id: 'retrain' });
+        } finally {
+            setIsRetraining(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -70,12 +96,22 @@ export default function InstructorDashboard() {
         <div className="min-h-screen bg-background p-8">
             <div className="max-w-7xl mx-auto space-y-8">
                 {/* Header */}
-                <div>
-                    <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-                        <BarChart3 className="w-8 h-8 text-primary" />
-                        Instructor Analytics Dashboard
-                    </h1>
-                    <p className="text-muted-foreground mt-2">Monitor class performance and student engagement.</p>
+                <div className="flex items-start justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+                            <BarChart3 className="w-8 h-8 text-primary" />
+                            Instructor Analytics Dashboard
+                        </h1>
+                        <p className="text-muted-foreground mt-2">Monitor class performance and student engagement.</p>
+                    </div>
+                    <Button 
+                        onClick={handleRetrainModel}
+                        disabled={isRetraining}
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2"
+                    >
+                        <RefreshCw className={`w-4 h-4 ${isRetraining ? 'animate-spin' : ''}`} />
+                        {isRetraining ? 'Training...' : 'Retrain AI Model'}
+                    </Button>
                 </div>
 
                 {/* Quick Stats */}

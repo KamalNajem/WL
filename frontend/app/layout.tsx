@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from 'react-hot-toast';
-import Sidebar from '@/components/Sidebar';
 import { GamificationProvider } from '@/contexts/GamificationContext';
+import { AuthProvider } from '@/contexts/AuthContext';
 import RewardNotification from '@/components/RewardNotification';
+import { ThemeProvider } from '@/components/theme-provider';
+import AppLayout from '@/components/AppLayout';
 import "./globals.css";
 
 const geistSans = Geist({
@@ -27,28 +29,34 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <GamificationProvider>
-          <Toaster 
-            toastOptions={{
-              style: {
-                background: 'hsl(var(--card))',
-                color: 'hsl(var(--foreground))',
-                border: '1px solid hsl(var(--border))',
-              },
-            }}
-          />
-          <RewardNotification />
-          <div className="flex min-h-screen">
-            <Sidebar />
-            <main className="flex-1 ml-64">
-              {children}
-            </main>
-          </div>
-        </GamificationProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem={false}
+          disableTransitionOnChange
+        >
+          <AuthProvider>
+            <GamificationProvider>
+              <Toaster 
+                toastOptions={{
+                  style: {
+                    background: 'hsl(var(--card))',
+                    color: 'hsl(var(--foreground))',
+                    border: '1px solid hsl(var(--border))',
+                  },
+                }}
+              />
+              <RewardNotification />
+              <AppLayout>
+                {children}
+              </AppLayout>
+            </GamificationProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

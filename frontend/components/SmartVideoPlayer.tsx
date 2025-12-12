@@ -1,16 +1,24 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import dynamic from 'next/dynamic';
 import api from '@/lib/axios';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward, CheckCircle2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
+import { 
+    CheckCircle2, 
+    AlertCircle, 
+    Play, 
+    Pause, 
+    Volume2, 
+    VolumeX, 
+    Maximize, 
+    Minimize,
+    SkipBack,
+    SkipForward
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-// Dynamic import to avoid SSR issues with react-player
-const ReactPlayer = dynamic(() => import('react-player'), { ssr: false });
 
 interface GamificationResponse {
     xp_gained?: number;
@@ -27,19 +35,6 @@ interface SmartVideoPlayerProps {
     onProgressUpdate?: (percent: number) => void;
 }
 
-interface ProgressState {
-    played: number;
-    playedSeconds: number;
-    loaded: number;
-    loadedSeconds: number;
-}
-
-interface PlayerInstance {
-    seekTo: (amount: number, type?: 'seconds' | 'fraction') => void;
-    getCurrentTime: () => number;
-    getDuration: () => number;
-}
-
 export default function SmartVideoPlayer({
     contentId,
     url,
@@ -47,42 +42,37 @@ export default function SmartVideoPlayer({
     onComplete,
     onProgressUpdate,
 }: SmartVideoPlayerProps) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const playerRef = useRef<any>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     
-    const [playing, setPlaying] = useState(false);
-    const [muted, setMuted] = useState(false);
-    const [volume, setVolume] = useState(0.8);
-    const [played, setPlayed] = useState(0);
     const [duration, setDuration] = useState(0);
-    const [seeking, setSeeking] = useState(false);
-    const [isReady, setIsReady] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
     const [isCompleted, setIsCompleted] = useState(false);
+    const [initialTimestamp, setInitialTimestamp] = useState(0);
     const [lastSavedTime, setLastSavedTime] = useState(0);
+    const [isLoaded, setIsLoaded] = useState(false);
+    
+    // Custom controls state
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [isMuted, setIsMuted] = useState(false);
+    const [volume, setVolume] = useState(1);
+    const [isFullscreen, setIsFullscreen] = useState(false);
     const [showControls, setShowControls] = useState(true);
     
     const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
     const controlsTimeout = useRef<NodeJS.Timeout | null>(null);
 
-    // Get player instance with proper methods
-    const getPlayer = (): PlayerInstance | null => {
-        if (playerRef.current) {
-            return playerRef.current as PlayerInstance;
-        }
-        return null;
-    };
-
     // Fetch initial progress on mount
     useEffect(() => {
+        if (!contentId) return;
+        
         const fetchProgress = async () => {
             try {
                 const response = await api.get(`courses/progress/?content_id=${contentId}`);
                 const { last_timestamp, is_completed } = response.data;
                 
-                const player = getPlayer();
-                if (last_timestamp > 0 && player) {
-                    player.seekTo(last_timestamp, 'seconds');
+                if (last_timestamp > 0) {
+                    setInitialTimestamp(last_timestamp);
                     setLastSavedTime(last_timestamp);
                 }
                 
@@ -108,7 +98,6 @@ export default function SmartVideoPlayer({
             
             setLastSavedTime(timestamp);
             
-            // Handle gamification response
             if (response.data.gamification) {
                 setIsCompleted(true);
                 onComplete?.(response.data.gamification);
@@ -120,74 +109,130 @@ export default function SmartVideoPlayer({
         }
     }, [contentId, onComplete, onProgressUpdate]);
 
+    // Auto-resume: seek to saved position when video metadata loads
+    const handleLoadedMetadata = () => {
+        if (videoRef.current) {
+            setDuration(videoRef.current.duration);
+            setIsLoaded(true);
+            
+            // Auto-resume to saved position
+            if (initialTimestamp > 0) {
+                videoRef.current.currentTime = initialTimestamp;
+            }
+        }
+    };
+
+    // Update current time as video plays
+    const handleTimeUpdate = () => {
+        if (videoRef.current) {
+            setCurrentTime(videoRef.current.currentTime);
+        }
+    };
+
     // Heartbeat: save progress every 10 seconds while playing
     useEffect(() => {
-        if (playing && isReady) {
+        const video = videoRef.current;
+        if (!video || !isLoaded) return;
+
+        const handlePlay = () => {
+            setIsPlaying(true);
+            // Start heartbeat when video plays
             heartbeatInterval.current = setInterval(() => {
-                const player = getPlayer();
-                if (player) {
-                    const currentTime = player.getCurrentTime();
-                    const percentPlayed = duration > 0 ? (currentTime / duration) * 100 : 0;
+                if (video && !video.paused && duration > 0) {
+                    const currentT = video.currentTime;
+                    const percentPlayed = (currentT / duration) * 100;
                     
-                    // Only save if moved significantly (more than 5 seconds)
-                    if (Math.abs(currentTime - lastSavedTime) > 5) {
-                        saveProgress(currentTime, percentPlayed);
+                    // Only save if we've moved at least 5 seconds since last save
+                    if (Math.abs(currentT - lastSavedTime) > 5) {
+                        saveProgress(currentT, percentPlayed);
                     }
                 }
-            }, 10000); // Every 10 seconds
-        }
+            }, 10000);
+        };
+
+        const handlePause = () => {
+            setIsPlaying(false);
+            // Clear heartbeat when video pauses
+            if (heartbeatInterval.current) {
+                clearInterval(heartbeatInterval.current);
+                heartbeatInterval.current = null;
+            }
+            
+            // Save current progress on pause
+            if (video && duration > 0) {
+                const currentT = video.currentTime;
+                const percentPlayed = (currentT / duration) * 100;
+                saveProgress(currentT, percentPlayed);
+            }
+        };
+
+        video.addEventListener('play', handlePlay);
+        video.addEventListener('pause', handlePause);
         
         return () => {
+            video.removeEventListener('play', handlePlay);
+            video.removeEventListener('pause', handlePause);
             if (heartbeatInterval.current) {
                 clearInterval(heartbeatInterval.current);
             }
         };
-    }, [playing, isReady, duration, lastSavedTime, saveProgress]);
+    }, [isLoaded, duration, lastSavedTime, saveProgress]);
 
-    // Handle video end
+    // Handle video ended
     const handleEnded = () => {
-        setPlaying(false);
+        setIsPlaying(false);
         saveProgress(duration, 100);
     };
 
-    // Handle progress updates
-    const handleProgress = (state: ProgressState) => {
-        if (!seeking) {
-            setPlayed(state.played);
-        }
-    };
-
-    // Handle seek
-    const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setPlayed(parseFloat(e.target.value));
-    };
-
-    const handleSeekMouseDown = () => {
-        setSeeking(true);
-    };
-
-    const handleSeekMouseUp = (e: React.MouseEvent<HTMLInputElement>) => {
-        setSeeking(false);
-        const target = e.target as HTMLInputElement;
-        const player = getPlayer();
-        player?.seekTo(parseFloat(target.value));
-    };
-
     // Skip forward/backward
-    const skip = (seconds: number) => {
-        const player = getPlayer();
-        if (player) {
-            const current = player.getCurrentTime();
-            player.seekTo(current + seconds, 'seconds');
+    const skip = useCallback((seconds: number) => {
+        if (videoRef.current) {
+            videoRef.current.currentTime = Math.max(0, Math.min(duration, videoRef.current.currentTime + seconds));
         }
-    };
+    }, [duration]);
 
-    // Format time
-    const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    };
+    // Toggle play/pause
+    const togglePlayPause = useCallback(() => {
+        if (videoRef.current) {
+            if (videoRef.current.paused) {
+                videoRef.current.play();
+            } else {
+                videoRef.current.pause();
+            }
+        }
+    }, []);
+
+    // Keyboard controls
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Only handle if this player is focused or no specific element is focused
+            if (e.code === 'Space' && (e.target === document.body || containerRef.current?.contains(e.target as Node))) {
+                e.preventDefault();
+                togglePlayPause();
+            }
+            if (e.code === 'ArrowLeft' && containerRef.current?.contains(e.target as Node)) {
+                e.preventDefault();
+                skip(-10);
+            }
+            if (e.code === 'ArrowRight' && containerRef.current?.contains(e.target as Node)) {
+                e.preventDefault();
+                skip(10);
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [togglePlayPause, skip]);
+
+    // Fullscreen change listener
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!document.fullscreenElement);
+        };
+
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }, []);
 
     // Auto-hide controls
     const handleMouseMove = () => {
@@ -196,13 +241,46 @@ export default function SmartVideoPlayer({
             clearTimeout(controlsTimeout.current);
         }
         controlsTimeout.current = setTimeout(() => {
-            if (playing) {
+            if (isPlaying) {
                 setShowControls(false);
             }
         }, 3000);
     };
 
-    // Handle fullscreen
+    // Seek to position
+    const handleSeek = (value: number[]) => {
+        if (videoRef.current && duration > 0) {
+            const newTime = (value[0] / 100) * duration;
+            videoRef.current.currentTime = newTime;
+            setCurrentTime(newTime);
+        }
+    };
+
+    // Toggle mute
+    const toggleMute = () => {
+        if (videoRef.current) {
+            if (isMuted) {
+                videoRef.current.muted = false;
+                videoRef.current.volume = volume || 0.5;
+                setIsMuted(false);
+            } else {
+                videoRef.current.muted = true;
+                setIsMuted(true);
+            }
+        }
+    };
+
+    // Handle volume change
+    const handleVolumeChange = (value: number[]) => {
+        if (videoRef.current) {
+            const newVolume = value[0] / 100;
+            videoRef.current.volume = newVolume;
+            setVolume(newVolume);
+            setIsMuted(newVolume === 0);
+        }
+    };
+
+    // Toggle fullscreen
     const toggleFullscreen = () => {
         if (containerRef.current) {
             if (document.fullscreenElement) {
@@ -213,92 +291,114 @@ export default function SmartVideoPlayer({
         }
     };
 
-    // Toggle mute with volume restore
-    const toggleMute = () => {
-        if (muted) {
-            setMuted(false);
-            if (volume === 0) setVolume(0.8);
-        } else {
-            setMuted(true);
-        }
-    };
+    // Format time for display
+    function formatTime(seconds: number) {
+        if (!seconds || isNaN(seconds)) return '0:00';
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
 
-    const currentTime = played * duration;
-    const progressPercent = played * 100;
+    const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+    // No URL state
+    if (!url) {
+        return (
+            <Card className="overflow-hidden border-border">
+                <div className="aspect-video bg-muted flex items-center justify-center">
+                    <div className="text-center text-muted-foreground">
+                        <AlertCircle className="w-12 h-12 mx-auto mb-2 text-destructive" />
+                        <p>No video URL provided</p>
+                    </div>
+                </div>
+                <CardContent className="p-4 bg-card">
+                    <h3 className="font-semibold text-foreground">{title}</h3>
+                </CardContent>
+            </Card>
+        );
+    }
 
     return (
         <Card className="overflow-hidden bg-black border-border">
+            {/* Video Container with Custom Controls */}
             <div 
                 ref={containerRef}
-                className="relative group"
+                className="relative group aspect-video bg-black"
                 onMouseMove={handleMouseMove}
-                onMouseLeave={() => playing && setShowControls(false)}
+                onMouseLeave={() => isPlaying && setShowControls(false)}
+                tabIndex={0}
             >
-                {/* Video Player */}
-                <div className="aspect-video">
-                    <ReactPlayer
-                        ref={playerRef}
-                        url={url}
-                        width="100%"
-                        height="100%"
-                        playing={playing}
-                        muted={muted}
-                        volume={volume}
-                        onReady={() => setIsReady(true)}
-                        onDuration={setDuration}
-                        // @ts-expect-error - react-player has different onProgress signature than native video
-                        onProgress={handleProgress}
-                        onEnded={handleEnded}
-                    />
-                </div>
+                {/* Video Element - No native controls */}
+                <video
+                    ref={videoRef}
+                    src={url}
+                    className="w-full h-full object-contain"
+                    onLoadedMetadata={handleLoadedMetadata}
+                    onTimeUpdate={handleTimeUpdate}
+                    onEnded={handleEnded}
+                    onClick={togglePlayPause}
+                    playsInline
+                />
 
                 {/* Completed Badge */}
                 {isCompleted && (
-                    <div className="absolute top-4 right-4 bg-green-500/90 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
+                    <div className="absolute top-4 right-4 bg-emerald-500/90 text-white px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1.5 z-20 backdrop-blur-sm">
                         <CheckCircle2 className="w-4 h-4" />
                         Completed
                     </div>
                 )}
 
-                {/* Controls Overlay */}
+                {/* Big Center Play Button (when paused) */}
+                {!isPlaying && isLoaded && (
+                    <div 
+                        className="absolute inset-0 flex items-center justify-center cursor-pointer z-10"
+                        onClick={togglePlayPause}
+                    >
+                        <div className="w-20 h-20 rounded-full bg-purple-600/90 hover:bg-purple-500 flex items-center justify-center transition-all duration-200 hover:scale-110 backdrop-blur-sm shadow-2xl">
+                            <Play className="w-10 h-10 text-white ml-1" fill="white" />
+                        </div>
+                    </div>
+                )}
+
+                {/* Loading State */}
+                {!isLoaded && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
+                        <div className="text-white/70">Loading video...</div>
+                    </div>
+                )}
+
+                {/* Custom Control Bar */}
                 <div className={cn(
-                    "absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4 transition-opacity duration-300",
-                    showControls ? "opacity-100" : "opacity-0"
+                    "absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-4 pb-4 pt-16 transition-opacity duration-300 z-10",
+                    showControls || !isPlaying ? "opacity-100" : "opacity-0 pointer-events-none"
                 )}>
                     {/* Progress Bar */}
-                    <div className="mb-3">
-                        <input
-                            type="range"
-                            min={0}
-                            max={0.999999}
-                            step="any"
-                            value={played}
-                            onChange={handleSeekChange}
-                            onMouseDown={handleSeekMouseDown}
-                            onMouseUp={handleSeekMouseUp}
-                            className="w-full h-1 bg-white/30 rounded-full appearance-none cursor-pointer
-                                       [&::-webkit-slider-thumb]:appearance-none 
-                                       [&::-webkit-slider-thumb]:w-3 
-                                       [&::-webkit-slider-thumb]:h-3 
-                                       [&::-webkit-slider-thumb]:rounded-full 
-                                       [&::-webkit-slider-thumb]:bg-primary"
-                            style={{
-                                background: `linear-gradient(to right, hsl(var(--primary)) ${progressPercent}%, rgba(255,255,255,0.3) ${progressPercent}%)`
-                            }}
+                    <div className="mb-3 group/progress">
+                        <Slider
+                            value={[progressPercent]}
+                            onValueChange={handleSeek}
+                            max={100}
+                            step={0.1}
+                            className="cursor-pointer [&_[role=slider]]:h-3 [&_[role=slider]]:w-3 [&_[role=slider]]:bg-purple-500 [&_[role=slider]]:border-0 [&_[role=slider]]:shadow-lg [&_.bg-primary]:bg-purple-500 [&_[data-orientation=horizontal]]:h-1.5 group-hover/progress:[&_[data-orientation=horizontal]]:h-2 transition-all"
                         />
                     </div>
 
-                    {/* Control Buttons */}
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+                    {/* Controls Row */}
+                    <div className="flex items-center justify-between gap-4">
+                        {/* Left Controls */}
+                        <div className="flex items-center gap-1">
                             {/* Play/Pause */}
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setPlaying(!playing)}
-                                className="text-white hover:bg-white/20"
+                                onClick={togglePlayPause}
+                                className="text-white hover:bg-white/20 h-9 w-9"
                             >
-                                {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                                {isPlaying ? (
+                                    <Pause className="w-5 h-5" fill="white" />
+                                ) : (
+                                    <Play className="w-5 h-5 ml-0.5" fill="white" />
+                                )}
                             </Button>
 
                             {/* Skip Back */}
@@ -306,7 +406,8 @@ export default function SmartVideoPlayer({
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => skip(-10)}
-                                className="text-white hover:bg-white/20"
+                                className="text-white hover:bg-white/20 h-9 w-9"
+                                title="Skip back 10s"
                             >
                                 <SkipBack className="w-4 h-4" />
                             </Button>
@@ -316,30 +417,47 @@ export default function SmartVideoPlayer({
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => skip(10)}
-                                className="text-white hover:bg-white/20"
+                                className="text-white hover:bg-white/20 h-9 w-9"
+                                title="Skip forward 10s"
                             >
                                 <SkipForward className="w-4 h-4" />
                             </Button>
 
                             {/* Volume */}
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={toggleMute}
-                                className="text-white hover:bg-white/20"
-                            >
-                                {muted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-                            </Button>
+                            <div className="flex items-center gap-1 group/volume">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={toggleMute}
+                                    className="text-white hover:bg-white/20 h-9 w-9"
+                                >
+                                    {isMuted || volume === 0 ? (
+                                        <VolumeX className="w-5 h-5" />
+                                    ) : (
+                                        <Volume2 className="w-5 h-5" />
+                                    )}
+                                </Button>
+                                <div className="w-0 overflow-hidden group-hover/volume:w-20 transition-all duration-200">
+                                    <Slider
+                                        value={[isMuted ? 0 : volume * 100]}
+                                        onValueChange={handleVolumeChange}
+                                        max={100}
+                                        step={1}
+                                        className="cursor-pointer [&_[role=slider]]:h-2.5 [&_[role=slider]]:w-2.5 [&_[role=slider]]:bg-white [&_[role=slider]]:border-0 [&_.bg-primary]:bg-white [&_[data-orientation=horizontal]]:h-1"
+                                    />
+                                </div>
+                            </div>
 
-                            {/* Time */}
-                            <span className="text-white text-sm ml-2">
+                            {/* Time Display */}
+                            <span className="text-white/90 text-sm font-mono ml-2 tabular-nums">
                                 {formatTime(currentTime)} / {formatTime(duration)}
                             </span>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                            {/* Progress Percent */}
-                            <span className="text-white/70 text-sm">
+                        {/* Right Controls */}
+                        <div className="flex items-center gap-1">
+                            {/* Progress Percentage */}
+                            <span className="text-purple-400 text-sm font-medium mr-2">
                                 {Math.round(progressPercent)}%
                             </span>
 
@@ -348,35 +466,33 @@ export default function SmartVideoPlayer({
                                 variant="ghost"
                                 size="icon"
                                 onClick={toggleFullscreen}
-                                className="text-white hover:bg-white/20"
+                                className="text-white hover:bg-white/20 h-9 w-9"
                             >
-                                <Maximize className="w-5 h-5" />
+                                {isFullscreen ? (
+                                    <Minimize className="w-5 h-5" />
+                                ) : (
+                                    <Maximize className="w-5 h-5" />
+                                )}
                             </Button>
                         </div>
                     </div>
                 </div>
-
-                {/* Click to play overlay (when paused) */}
-                {!playing && isReady && (
-                    <div 
-                        className="absolute inset-0 flex items-center justify-center cursor-pointer"
-                        onClick={() => setPlaying(true)}
-                    >
-                        <div className="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center hover:bg-primary transition-colors">
-                            <Play className="w-8 h-8 text-white ml-1" />
-                        </div>
-                    </div>
-                )}
             </div>
 
             {/* Title Bar */}
-            <CardContent className="p-4 bg-card">
+            <CardContent className="p-4 bg-card border-t border-border">
                 <h3 className="font-semibold text-foreground">{title}</h3>
                 <div className="flex items-center gap-4 mt-2">
-                    <Progress value={progressPercent} className="flex-1 h-2" />
-                    <span className="text-sm text-muted-foreground">
-                        {Math.round(progressPercent)}% complete
+                    <Progress 
+                        value={progressPercent} 
+                        className="flex-1 h-2 [&>div]:bg-purple-500" 
+                    />
+                    <span className="text-sm text-muted-foreground tabular-nums">
+                        {formatTime(currentTime)} / {formatTime(duration)}
                     </span>
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                    {Math.round(progressPercent)}% complete
                 </div>
             </CardContent>
         </Card>

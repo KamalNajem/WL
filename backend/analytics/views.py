@@ -10,6 +10,35 @@ from users.models import User, StudentProfile
 from courses.models import Course, ContentBlock
 
 
+class GamificationStatusView(APIView):
+    """
+    Returns the user's current gamification status.
+    GET /api/analytics/status/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        try:
+            profile = StudentProfile.objects.get(user=request.user)
+        except StudentProfile.DoesNotExist:
+            # Create a profile if it doesn't exist
+            profile = StudentProfile.objects.create(user=request.user)
+
+        # Calculate XP requirements for level progression
+        xp_for_current_level = (profile.current_level - 1) * 100
+        xp_for_next_level = profile.current_level * 100
+
+        return Response({
+            'xp': profile.gamification_points,
+            'level': profile.current_level,
+            'badges': profile.badges_earned or [],
+            'streak_days': 0,  # Could be calculated from interaction logs
+            'streak_bonus': 0,
+            'xp_for_current_level': xp_for_current_level,
+            'xp_for_next_level': xp_for_next_level,
+        })
+
+
 class LogInteractionView(generics.CreateAPIView):
     queryset = InteractionLog.objects.all()
     serializer_class = InteractionLogSerializer

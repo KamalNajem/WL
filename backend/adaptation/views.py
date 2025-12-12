@@ -1,8 +1,9 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework import status
 from .services import LearningStyleClusterer, calculate_vark_score
+from .engine import ModelRetrainer
 
 class SubmitQuizView(APIView):
     permission_classes = [IsAuthenticated]
@@ -77,3 +78,60 @@ class PredictStyleView(APIView):
             })
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class RetrainModelView(APIView):
+    """
+    API endpoint to trigger ML model retraining.
+    
+    POST /api/adaptation/retrain/
+    
+    Combines historical training data with live platform data,
+    retrains the KMeans clustering model, and updates all user predictions.
+    """
+    permission_classes = [IsAuthenticated]  # Could be IsAdminUser for production
+
+    def post(self, request):
+        try:
+            # Get optional parameters
+            n_clusters = request.data.get('n_clusters', 3)
+            
+            # Initialize retrainer and run
+            retrainer = ModelRetrainer()
+            result = retrainer.retrain_model(n_clusters=n_clusters)
+            
+            if result['status'] == 'success':
+                return Response({
+                    'status': 'success',
+                    'message': result['message'],
+                    'details': {
+                        'total_samples': result.get('total_samples', 0),
+                        'live_samples': result.get('live_samples', 0),
+                        'historical_samples': result.get('historical_samples', 0),
+                        'students_updated': result.get('students_updated', 0),
+                        'n_clusters': result.get('n_clusters', 3)
+                    }
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'status': 'error',
+                    'message': result['message']
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': f'Retraining failed: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get(self, request):
+        """Get current model information."""
+        try:
+            retrainer = ModelRetrainer()
+            info = retrainer.get_model_info()
+            return Response(info, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

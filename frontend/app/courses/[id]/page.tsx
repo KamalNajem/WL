@@ -1,15 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import api from '@/lib/axios';
 import Link from 'next/link';
-import { useContentTracker } from '@/hooks/use-tracker';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import SmartVideoPlayer from '@/components/SmartVideoPlayer';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { PlayCircle, FileText, HelpCircle, Headphones, ArrowLeft, CheckCircle2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+interface UserProgress {
+    status: 'not_started' | 'in_progress' | 'completed';
+    last_timestamp: number;
+    progress_percent: number;
+    is_completed: boolean;
+}
 
 interface ContentBlock {
     id: number;
@@ -20,6 +27,7 @@ interface ContentBlock {
     file: string | null;
     related_styles: string[];
     is_recommended?: boolean;
+    user_progress?: UserProgress | null;
 }
 
 interface Module {
@@ -36,8 +44,7 @@ interface Course {
     modules: Module[];
 }
 
-const BlockRenderer = ({ block }: { block: ContentBlock }) => {
-    const { markComplete } = useContentTracker(block.id);
+const BlockRenderer = ({ block, onProgressUpdate }: { block: ContentBlock; onProgressUpdate: () => void }) => {
 
     const getIcon = (type: string) => {
         switch (type) {
@@ -49,15 +56,38 @@ const BlockRenderer = ({ block }: { block: ContentBlock }) => {
         }
     };
 
+    const handleVideoComplete = () => {
+        onProgressUpdate();
+    };
+
+    const handleMarkComplete = async () => {
+        try {
+            await api.post('courses/progress/', {
+                content_id: block.id,
+                percent: 100,
+            });
+            onProgressUpdate();
+        } catch (error) {
+            console.error('Error marking complete:', error);
+        }
+    };
+
+    const isCompleted = block.user_progress?.is_completed || false;
+    const progressPercent = block.user_progress?.progress_percent || 0;
+
     return (
         <Card className={cn(
             "transition-all duration-200 hover:shadow-lg",
-            block.is_recommended ? "border-primary/50 ring-1 ring-primary/20" : "hover:border-primary/30"
+            block.is_recommended ? "border-primary/50 ring-1 ring-primary/20" : "hover:border-primary/30",
+            isCompleted && "border-green-500/30 bg-green-500/5"
         )}>
             <CardContent className="p-6">
                 <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0 w-12 h-12 bg-muted rounded-lg flex items-center justify-center text-primary">
-                        {getIcon(block.content_type)}
+                    <div className={cn(
+                        "flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center",
+                        isCompleted ? "bg-green-500/20 text-green-500" : "bg-muted text-primary"
+                    )}>
+                        {isCompleted ? <CheckCircle2 className="w-6 h-6" /> : getIcon(block.content_type)}
                     </div>
                     
                     <div className="flex-grow space-y-3">
@@ -66,11 +96,18 @@ const BlockRenderer = ({ block }: { block: ContentBlock }) => {
                                 <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">
                                     {block.title}
                                 </h3>
-                                {block.is_recommended && (
-                                    <div className="inline-flex items-center gap-1 text-xs font-medium text-primary mt-1">
-                                        <Sparkles className="w-3 h-3" /> Recommended for you
-                                    </div>
-                                )}
+                                <div className="flex items-center gap-2 mt-1">
+                                    {block.is_recommended && (
+                                        <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+                                            <Sparkles className="w-3 h-3" /> Recommended
+                                        </span>
+                                    )}
+                                    {progressPercent > 0 && !isCompleted && (
+                                        <span className="text-xs text-muted-foreground">
+                                            {progressPercent}% complete
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
@@ -79,30 +116,35 @@ const BlockRenderer = ({ block }: { block: ContentBlock }) => {
                         )}
 
                         <div className="pt-2">
+                            {/* Smart Video Player for VIDEO content */}
                             {block.content_type === 'VIDEO' && block.url && (
-                                <div className="rounded-lg overflow-hidden shadow-lg border border-border bg-black mb-4">
-                                    <div className="aspect-w-16 aspect-h-9">
-                                        <iframe 
-                                            src={block.url.replace('watch?v=', 'embed/')} 
-                                            className="w-full h-64" 
-                                            allowFullScreen
-                                            title={block.title}
-                                        />
-                                    </div>
+                                <SmartVideoPlayer
+                                    contentId={block.id}
+                                    url={block.url}
+                                    title={block.title}
+                                    onComplete={handleVideoComplete}
+                                    onProgressUpdate={onProgressUpdate}
+                                />
+                            )}
+
+                            {/* Progress bar for non-video content */}
+                            {block.content_type !== 'VIDEO' && progressPercent > 0 && (
+                                <div className="mb-4">
+                                    <Progress value={progressPercent} className="h-2" />
                                 </div>
                             )}
 
-                            <div className="flex gap-3">
+                            <div className="flex gap-3 mt-4">
                                 {block.content_type === 'PDF' && (
                                     <Button 
-                                        variant="outline" 
+                                        variant={isCompleted ? "secondary" : "outline"}
                                         size="sm"
                                         asChild
-                                        onClick={() => markComplete()}
+                                        onClick={handleMarkComplete}
                                     >
                                         <a href={block.file || block.url || '#'} target="_blank">
                                             <FileText className="w-4 h-4 mr-2" />
-                                            Open Resource
+                                            {isCompleted ? 'View Again' : 'Open Resource'}
                                         </a>
                                     </Button>
                                 )}
@@ -110,22 +152,31 @@ const BlockRenderer = ({ block }: { block: ContentBlock }) => {
                                 {block.content_type === 'QUIZ' && (
                                     <Button 
                                         size="sm"
-                                        onClick={() => markComplete()}
+                                        variant={isCompleted ? "secondary" : "default"}
+                                        onClick={handleMarkComplete}
                                     >
                                         <HelpCircle className="w-4 h-4 mr-2" />
-                                        Start Challenge
+                                        {isCompleted ? 'Retake Quiz' : 'Start Challenge'}
                                     </Button>
                                 )}
-                                
-                                {block.content_type === 'VIDEO' && (
-                                     <Button 
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() => markComplete()}
-                                    >
-                                        <CheckCircle2 className="w-4 h-4 mr-2" />
-                                        Mark Watched
-                                    </Button>
+
+                                {block.content_type === 'PODCAST' && block.url && (
+                                    <>
+                                        <audio controls className="w-full max-w-md">
+                                            <source src={block.url} type="audio/mpeg" />
+                                            Your browser does not support audio.
+                                        </audio>
+                                        {!isCompleted && (
+                                            <Button 
+                                                variant="secondary"
+                                                size="sm"
+                                                onClick={handleMarkComplete}
+                                            >
+                                                <CheckCircle2 className="w-4 h-4 mr-2" />
+                                                Mark Listened
+                                            </Button>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -141,24 +192,48 @@ export default function CourseDetail() {
     const [course, setCourse] = useState<Course | null>(null);
     const [loading, setLoading] = useState(true);
     const [activeModuleId, setActiveModuleId] = useState<number | null>(null);
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    const fetchCourse = useCallback(async () => {
+        try {
+            const response = await api.get(`courses/${id}/`);
+            setCourse(response.data);
+            if (response.data.modules.length > 0 && activeModuleId === null) {
+                setActiveModuleId(response.data.modules[0].id);
+            }
+        } catch (error) {
+            console.error('Error fetching course:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [id, activeModuleId]);
 
     useEffect(() => {
-        const fetchCourse = async () => {
-            try {
-                const response = await api.get(`courses/${id}/`);
-                setCourse(response.data);
-                if (response.data.modules.length > 0) {
-                    setActiveModuleId(response.data.modules[0].id);
-                }
-            } catch (error) {
-                console.error('Error fetching course:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         if (id) fetchCourse();
-    }, [id]);
+    }, [id, refreshKey, fetchCourse]);
+
+    const handleProgressUpdate = () => {
+        // Refresh course data to get updated progress
+        setRefreshKey(prev => prev + 1);
+    };
+
+    // Calculate overall course progress
+    const calculateProgress = () => {
+        if (!course) return 0;
+        let totalBlocks = 0;
+        let completedBlocks = 0;
+        course.modules.forEach(module => {
+            module.content_blocks.forEach(block => {
+                totalBlocks++;
+                if (block.user_progress?.is_completed) {
+                    completedBlocks++;
+                }
+            });
+        });
+        return totalBlocks > 0 ? Math.round((completedBlocks / totalBlocks) * 100) : 0;
+    };
+
+    const courseProgress = calculateProgress();
 
     if (loading) return <div className="p-8 text-muted-foreground">Loading quest data...</div>;
     if (!course) return <div className="p-8 text-destructive">Quest not found.</div>;
@@ -177,7 +252,10 @@ export default function CourseDetail() {
                     <div className="flex items-center gap-4">
                         <div className="text-right hidden md:block">
                             <div className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Progress</div>
-                            <div className="text-primary font-mono">0% Complete</div>
+                            <div className="text-primary font-mono">{courseProgress}% Complete</div>
+                        </div>
+                        <div className="w-24">
+                            <Progress value={courseProgress} className="h-2" />
                         </div>
                     </div>
                 </div>
@@ -227,7 +305,11 @@ export default function CourseDetail() {
 
                             <div className="space-y-6">
                                 {module.content_blocks.map((block) => (
-                                    <BlockRenderer key={block.id} block={block} />
+                                    <BlockRenderer 
+                                        key={block.id} 
+                                        block={block} 
+                                        onProgressUpdate={handleProgressUpdate}
+                                    />
                                 ))}
                             </div>
                         </div>

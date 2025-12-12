@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import api from '@/lib/axios';
-import { LayoutDashboard, BookOpen, FileQuestion, User, GraduationCap, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, BookOpen, FileQuestion, User, GraduationCap, BarChart3, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ModeToggle } from '@/components/ModeToggle';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface UserProfile {
     username: string;
@@ -15,6 +17,7 @@ interface UserProfile {
 export default function Sidebar() {
     const pathname = usePathname();
     const [user, setUser] = useState<UserProfile | null>(null);
+    const { logout, user: authUser } = useAuth();
 
     useEffect(() => {
         const fetchUser = async () => {
@@ -28,12 +31,14 @@ export default function Sidebar() {
         fetchUser();
     }, []);
 
+    // Filter nav items based on user role
     const navItems = [
         { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
         { name: 'Courses', href: '/courses', icon: BookOpen },
         { name: 'Quizzes', href: '/quiz', icon: FileQuestion },
         { name: 'Profile', href: '/profile', icon: User },
-        { name: 'Instructor', href: '/instructor', icon: BarChart3 },
+        // Only show Instructor link if user is NOT a student
+        ...(!authUser?.is_student ? [{ name: 'Instructor', href: '/instructor', icon: BarChart3 }] : []),
     ];
 
     return (
@@ -74,17 +79,27 @@ export default function Sidebar() {
             {/* User Profile Area */}
             <div className="p-4 border-t border-border bg-card/50">
                 {user ? (
-                    <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors cursor-pointer group">
-                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold shadow-sm border border-primary/20 group-hover:border-primary/50 transition-colors">
-                            {user.username.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-foreground truncate">{user.username}</p>
-                            <div className="flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                <p className="text-xs text-emerald-500 font-medium">Lvl {user.current_level || 1}</p>
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors cursor-pointer group">
+                            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold shadow-sm border border-primary/20 group-hover:border-primary/50 transition-colors">
+                                {user.username.charAt(0).toUpperCase()}
                             </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-foreground truncate">{user.username}</p>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    <p className="text-xs text-emerald-500 font-medium">Lvl {user.current_level || 1}</p>
+                                </div>
+                            </div>
+                            <ModeToggle />
                         </div>
+                        <button
+                            onClick={logout}
+                            className="w-full flex items-center gap-2 px-4 py-2 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                        >
+                            <LogOut className="h-4 w-4" />
+                            <span className="text-sm font-medium">Logout</span>
+                        </button>
                     </div>
                 ) : (
                     <div className="animate-pulse flex items-center gap-3">

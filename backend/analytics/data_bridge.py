@@ -222,3 +222,132 @@ class DataBridge:
             'completions': completions,
             'completions_per_day': round(completions / days, 2),
         }
+
+    @classmethod
+    def prepare_training_data(cls) -> pd.DataFrame:
+        """
+        Prepare a combined training dataset from historical CSV + live DB data.
+        
+        Returns a DataFrame ready for ML training with columns matching 
+        the original merged_dataset.csv structure.
+        """
+        from courses.models import ContentBlock
+        from comments.models import Comment
+        
+        # Load historical data
+        csv_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), 
+            'data', 
+            'merged_dataset.csv'
+        )
+        
+        historical_df = pd.DataFrame()
+        if os.path.exists(csv_path):
+            historical_df = pd.read_csv(csv_path)
+        
+        # Get defaults from historical data for missing values
+        defaults = {}
+        if not historical_df.empty:
+            for col in ['Motivation', 'Internet', 'EduTech', 'StressLevel']:
+                if col in historical_df.columns:
+                    defaults[col] = historical_df[col].mode().iloc[0] if not historical_df[col].mode().empty else 5
+            if 'Attendance' in historical_df.columns:
+                defaults['Attendance'] = historical_df['Attendance'].mean()
+        
+        # Fallback defaults
+        defaults.setdefault('Motivation', 5)
+        defaults.setdefault('Internet', 1)
+        defaults.setdefault('EduTech', 1)
+        defaults.setdefault('StressLevel', 3)
+        defaults.setdefault('Attendance', 80)
+        
+        # Fetch all student profiles from DB
+        profiles = StudentProfile.objects.select_related('user').all()
+        
+        live_data = []
+        for profile in profiles:
+            user = profile.user
+            
+            # Sync latest stats
+            cls.sync_user_profile(user)
+            profile.refresh_from_db()
+            
+            # Calculate StudyHours from InteractionLog
+            total_seconds = InteractionLog.objects.filter(user=user).aggregate(
+                total=Sum('time_spent_seconds')
+            )['total'] or 0
+            study_hours = total_seconds / 3600
+            
+            # Count resources accessed (ContentProgress entries)
+            resources = ContentProgress.objects.filter(user=user).count()
+            
+            # Calculate assignment completion rate
+            total_blocks = ContentBlock.objects.count()
+            completed_blocks = ContentProgress.objects.filter(
+                user=user, 
+                is_completed=True
+            ).count()
+            assignment_completion = (completed_blocks / total_blocks * 100) if total_blocks > 0 else 0
+            
+            # Average quiz score
+            quiz_stats = QuizAttempt.objects.filter(user=user).aggregate(avg=Avg('percentage'))
+            exam_score = quiz_stats['avg'] or 50  # Default 50 if no quizzes
+            
+            # Count discussions (comments)
+            try:
+                discussions = Comment.objects.filter(user=user).count()
+            except Exception:
+                discussions = 0
+            
+            # Map learning style to numeric
+            style_label = user.current_style_label or 'Visual'
+            style_numeric = cls.STYLE_MAPPING.get(style_label, 0)
+            
+            row = {
+                'StudyHours': round(study_hours, 2),
+                'Attendance': profile.attendance or defaults['Attendance'],
+                'Resources': resources,
+                'AssignmentCompletion': round(assignment_completion, 2),
+                'ExamScore': round(exam_score, 2),
+                'Discussions': discussions,
+                'LearningStyle': style_numeric,
+                # Fill in defaults for columns that may not have live data
+                'Extracurricular': 1 if profile.extracurricular_activities else 0,
+                'Motivation': defaults['Motivation'],
+                'Internet': defaults['Internet'],
+                'EduTech': defaults['EduTech'],
+                'StressLevel': defaults['StressLevel'],
+                'FinalGrade': exam_score,  # Use exam score as proxy
+                'Gender': 1,  # Placeholder
+                'Age': 20,  # Placeholder
+                'source': 'live'  # Mark as live data
+            }
+            live_data.append(row)
+        
+        live_df = pd.DataFrame(live_data)
+        
+        # Mark historical data
+        if not historical_df.empty:
+            historical_df['source'] = 'historical'
+        
+        # Combine datasets
+        if not live_df.empty and not historical_df.empty:
+            # Ensure column alignment - only keep common columns for training
+            common_cols = ['StudyHours', 'Attendance', 'Resources', 'Extracurricular', 
+                          'Motivation', 'Internet', 'ExamScore', 'source']
+            
+            # Add missing columns to each dataframe with defaults
+            for col in common_cols:
+                if col not in historical_df.columns:
+                    historical_df[col] = 0
+                if col not in live_df.columns:
+                    live_df[col] = 0
+            
+            combined_df = pd.concat([historical_df, live_df], ignore_index=True)
+        elif not live_df.empty:
+            combined_df = live_df
+        else:
+            combined_df = historical_df
+        
+        return combined_df
+
