@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import api from '@/lib/axios';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface GamificationData {
     xp: number;
@@ -45,9 +46,19 @@ export function GamificationProvider({ children }: { children: ReactNode }) {
     const [gamification, setGamification] = useState<GamificationData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [pendingRewards, setPendingRewards] = useState<GamificationContextType['pendingRewards']>(null);
+    
+    // Get auth state - only fetch gamification if authenticated
+    const { isAuthenticated, isLoading: authLoading } = useAuth();
 
     // Fetch gamification data from backend
     const refreshGamification = useCallback(async () => {
+        // Don't fetch if not authenticated
+        if (!isAuthenticated) {
+            console.log("🔄 Skipping gamification fetch - not authenticated");
+            setIsLoading(false);
+            return;
+        }
+        
         console.log("🔄 Refreshing gamification status...");
         try {
             const response = await api.get('analytics/status/');
@@ -58,12 +69,14 @@ export function GamificationProvider({ children }: { children: ReactNode }) {
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [isAuthenticated]);
 
-    // Initial fetch
+    // Initial fetch - wait for auth to be determined first
     useEffect(() => {
-        refreshGamification();
-    }, [refreshGamification]);
+        if (!authLoading) {
+            refreshGamification();
+        }
+    }, [refreshGamification, authLoading, isAuthenticated]);
 
     // Optimistically add XP (for instant feedback)
     const addXP = useCallback((amount: number) => {

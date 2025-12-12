@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework import status
+import traceback
 from .services import LearningStyleClusterer, calculate_vark_score
 from .engine import ModelRetrainer
 
@@ -93,12 +94,16 @@ class RetrainModelView(APIView):
 
     def post(self, request):
         try:
+            print("🔄 RetrainModelView.post() called")
+            
             # Get optional parameters
             n_clusters = request.data.get('n_clusters', 3)
             
             # Initialize retrainer and run
             retrainer = ModelRetrainer()
+            print(f"🔄 Starting retraining with n_clusters={n_clusters}")
             result = retrainer.retrain_model(n_clusters=n_clusters)
+            print(f"🔄 Retraining result: {result}")
             
             if result['status'] == 'success':
                 return Response({
@@ -119,9 +124,13 @@ class RetrainModelView(APIView):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
         except Exception as e:
+            error_traceback = traceback.format_exc()
+            print(f"❌ Retraining EXCEPTION: {str(e)}")
+            print(f"❌ Traceback:\n{error_traceback}")
             return Response({
                 'status': 'error',
-                'message': f'Retraining failed: {str(e)}'
+                'message': f'Retraining failed: {str(e)}',
+                'traceback': error_traceback
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def get(self, request):

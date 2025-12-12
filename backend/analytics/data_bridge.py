@@ -232,7 +232,13 @@ class DataBridge:
         the original merged_dataset.csv structure.
         """
         from courses.models import ContentBlock
-        from comments.models import Comment
+        # Comment model may not exist - handle gracefully
+        try:
+            from comments.models import Comment
+            has_comments = True
+        except ImportError:
+            has_comments = False
+            print("⚠️ Comments app not found - skipping comment counts")
         
         print("📊 Generating Training Data...")
         
@@ -303,11 +309,13 @@ class DataBridge:
             quiz_stats = QuizAttempt.objects.filter(user=user).aggregate(avg=Avg('percentage'))
             exam_score = quiz_stats['avg'] or 50  # Default 50 if no quizzes
             
-            # Count discussions (comments)
-            try:
-                discussions = Comment.objects.filter(user=user).count()
-            except Exception:
-                discussions = 0
+            # Count discussions (comments) - only if comments app exists
+            discussions = 0
+            if has_comments:
+                try:
+                    discussions = Comment.objects.filter(user=user).count()
+                except Exception:
+                    discussions = 0
             
             # Map learning style to numeric
             style_label = user.current_style_label or 'Visual'
