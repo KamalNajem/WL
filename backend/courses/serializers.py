@@ -57,9 +57,38 @@ class ModuleSerializer(serializers.ModelSerializer):
         fields = ['id', 'title', 'description', 'order', 'content_blocks']
 
 
+class CourseListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for course catalog listing"""
+    total_lessons = serializers.IntegerField(read_only=True)
+    enrolled_count = serializers.IntegerField(read_only=True)
+    instructor_name = serializers.CharField(source='instructor.username', read_only=True)
+    modules_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Course
+        fields = [
+            'id', 'title', 'description', 'instructor', 'instructor_name',
+            'category', 'difficulty', 'estimated_hours', 'image_url', 'tags',
+            'is_featured', 'total_lessons', 'enrolled_count', 'modules_count',
+            'created_at', 'updated_at'
+        ]
+    
+    def get_modules_count(self, obj):
+        return obj.modules.count()
+
+
 class CourseSerializer(serializers.ModelSerializer):
+    """Full serializer with modules and content blocks"""
     modules = ModuleSerializer(many=True, read_only=True)
+    total_lessons = serializers.IntegerField(read_only=True)
+    enrolled_count = serializers.IntegerField(read_only=True)
+    instructor_name = serializers.CharField(source='instructor.username', read_only=True)
 
     class Meta:
         model = Course
-        fields = ['id', 'title', 'description', 'instructor', 'created_at', 'modules']
+        fields = [
+            'id', 'title', 'description', 'instructor', 'instructor_name',
+            'category', 'difficulty', 'estimated_hours', 'image_url', 'tags',
+            'is_featured', 'total_lessons', 'enrolled_count',
+            'created_at', 'updated_at', 'modules'
+        ]

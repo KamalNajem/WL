@@ -4,9 +4,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
+from django.db.models import Q
 from .models import Course, ContentBlock, ContentProgress, UserNote, Comment
 from .serializers import (
-    CourseSerializer, ContentBlockSerializer, ContentProgressSerializer,
+    CourseSerializer, CourseListSerializer, ContentBlockSerializer, ContentProgressSerializer,
     UserNoteSerializer, CommentSerializer
 )
 from analytics.gamification import GamificationEngine
@@ -15,8 +16,40 @@ from analytics.models import InteractionLog
 
 class CourseViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Course.objects.all()
-    serializer_class = CourseSerializer
     permission_classes = [permissions.IsAuthenticated]
+    
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return CourseListSerializer
+        return CourseSerializer
+    
+    def get_queryset(self):
+        queryset = Course.objects.all()
+        
+        # Search filter
+        search = self.request.query_params.get('search', None)
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search) | 
+                Q(description__icontains=search)
+            )
+        
+        # Category filter
+        category = self.request.query_params.get('category', None)
+        if category:
+            queryset = queryset.filter(category=category)
+        
+        # Difficulty filter
+        difficulty = self.request.query_params.get('difficulty', None)
+        if difficulty:
+            queryset = queryset.filter(difficulty=difficulty)
+        
+        # Tag filter (matches any tag in the list)
+        tag = self.request.query_params.get('tag', None)
+        if tag:
+            queryset = queryset.filter(tags__contains=[tag])
+        
+        return queryset
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()

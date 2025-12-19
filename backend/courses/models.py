@@ -3,14 +3,51 @@ from django.conf import settings
 
 
 class Course(models.Model):
+    class Difficulty(models.TextChoices):
+        BEGINNER = 'BEGINNER', 'Beginner'
+        INTERMEDIATE = 'INTERMEDIATE', 'Intermediate'
+        ADVANCED = 'ADVANCED', 'Advanced'
+    
+    class Category(models.TextChoices):
+        PROGRAMMING = 'PROGRAMMING', 'Programming'
+        WEB_DEV = 'WEB_DEV', 'Web Development'
+        DATA_SCIENCE = 'DATA_SCIENCE', 'Data Science'
+        MACHINE_LEARNING = 'MACHINE_LEARNING', 'Machine Learning'
+        DESIGN = 'DESIGN', 'Design'
+        SECURITY = 'SECURITY', 'Cybersecurity'
+        MOBILE = 'MOBILE', 'Mobile Development'
+        DEVOPS = 'DEVOPS', 'DevOps'
+    
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     instructor = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True, related_name='courses_taught')
+    
+    # New fields for enhanced catalog
+    category = models.CharField(max_length=30, choices=Category.choices, default=Category.PROGRAMMING)
+    difficulty = models.CharField(max_length=20, choices=Difficulty.choices, default=Difficulty.BEGINNER)
+    estimated_hours = models.PositiveIntegerField(default=10, help_text="Estimated hours to complete")
+    image_url = models.URLField(blank=True, null=True, help_text="Course thumbnail image URL")
+    tags = models.JSONField(default=list, blank=True, help_text="List of tags like ['Python', 'Backend', 'API']")
+    is_featured = models.BooleanField(default=False)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.title
+    
+    @property
+    def total_lessons(self):
+        """Count total content blocks across all modules"""
+        return sum(module.content_blocks.count() for module in self.modules.all())
+    
+    @property
+    def enrolled_count(self):
+        """Count unique users who have progress in this course"""
+        from django.db.models import Count
+        return ContentProgress.objects.filter(
+            content_block__module__course=self
+        ).values('user').distinct().count()
 
 class Module(models.Model):
     title = models.CharField(max_length=255)
