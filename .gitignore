@@ -14,3 +14,8 @@ frontend/build/
 .DS_Store
 .env
 .vscode/
+# Large video files (stored locally only)
+frontend/public/videos/*.mp4
+frontend/public/videos/*.mov
+frontend/public/videos/*.avi
+
